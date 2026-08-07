@@ -3,26 +3,48 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import SubmitFeedback from "./pages/SubmitFeedback";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
+import CaseDetail from "./pages/CaseDetail";
 import ProtectedRoute from "./components/ProtectedRoute";
+import RoleRoute from "./components/RoleRoute";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Redirect root to citizen form */}
+        {/* Redirect root to login */}
         <Route path="/" element={<Navigate to="login" replace />} />
 
         {/* Public Routes */}
-        <Route path="/submit" element={<SubmitFeedback />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
-        {/* Protected Route */}
+        {/* Any logged-in role (Guest and up) can submit a report */}
+        <Route
+          path="/submit"
+          element={
+            <ProtectedRoute>
+              <SubmitFeedback />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Staff and above only */}
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
+            <RoleRoute minRole="staff">
               <Dashboard />
-            </ProtectedRoute>
+            </RoleRoute>
+          }
+        />
+
+        <Route
+          path="/cases/:id"
+          element={
+            <RoleRoute minRole="staff">
+              <CaseDetail />
+            </RoleRoute>
           }
         />
       </Routes>

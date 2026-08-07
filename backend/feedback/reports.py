@@ -134,13 +134,20 @@ class ExportPDFView(APIView):
 
         build_header(elements)
 
-        total = CitizenFeedback.objects.count()
+        queryset = CitizenFeedback.objects.all()
 
-        high = CitizenFeedback.objects.filter(priority="High").count()
+        county_id = request.query_params.get("county")
 
-        medium = CitizenFeedback.objects.filter(priority="Medium").count()
+        if county_id:
+            queryset = queryset.filter(ward__county_id=county_id)
 
-        low = CitizenFeedback.objects.filter(priority="Low").count()
+        total = queryset.count()
+
+        high = queryset.filter(priority="High").count()
+
+        medium = queryset.filter(priority="Medium").count()
+
+        low = queryset.filter(priority="Low").count()
 
         elements.append(
             Paragraph(
@@ -186,7 +193,7 @@ class ExportPDFView(APIView):
         elements.append(Spacer(1,12))
 
         reports = (
-            CitizenFeedback.objects
+            queryset
             .select_related("ward","category")
             .order_by("-created_at")[:10]
         )
