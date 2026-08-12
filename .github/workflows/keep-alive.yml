@@ -1,0 +1,30 @@
+name: Keep Backend Awake
+
+# Render's free tier sleeps a web service after 15 minutes of no traffic,
+# so the first visitor after that has to wait ~30-60s for it to wake up.
+# This pings the backend every 5 minutes to keep it warm.
+#
+# Setup (one-time, after the Render backend is deployed):
+#   Repo -> Settings -> Secrets and variables -> Actions -> Variables tab
+#   -> "New repository variable"
+#   Name:  BACKEND_URL
+#   Value: https://your-service-name.onrender.com   (no trailing slash)
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend to keep it awake
+        run: |
+          if [ -z "${{ vars.BACKEND_URL }}" ]; then
+            echo "BACKEND_URL repo variable isn't set yet - nothing to ping. See comment at the top of this file."
+            exit 0
+          fi
+          echo "Pinging ${{ vars.BACKEND_URL }}/api/counties/"
+          curl -sf -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" "${{ vars.BACKEND_URL }}/api/counties/" \
+            || echo "Ping failed (backend may be cold-starting or down) - not treated as a workflow failure."
