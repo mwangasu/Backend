@@ -9,11 +9,12 @@ https://docs.djangoproject.com/en/6.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
-CORS_ALLOW_ALL_ORIGINS = True
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import timedelta
 import os
+
+import dj_database_url
 
 load_dotenv()
 
@@ -25,16 +26,38 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure--*&-q&^xh7l^8b@hs*vcad$&b0a304-b**9se+4@eb^(9p3^o!'
+# Falls back to an insecure dev-only key so local `runserver` keeps working
+# without a .env file; production MUST set a real SECRET_KEY env var.
+SECRET_KEY = os.getenv(
+    "SECRET_KEY",
+    "django-insecure--*&-q&^xh7l^8b@hs*vcad$&b0a304-b**9se+4@eb^(9p3^o!",
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = os.getenv("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = [
-    "127.0.0.1",
-    "localhost",
-    "civic-lens-ai-1.onrender.com",
+    h.strip()
+    for h in os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost,.onrender.com").split(",")
+    if h.strip()
 ]
+
+# Trust HTTPS origins behind Render's/other proxies' TLS termination.
+CSRF_TRUSTED_ORIGINS = [
+    o.strip()
+    for o in os.getenv("CSRF_TRUSTED_ORIGINS", "https://*.onrender.com,https://*.vercel.app").split(",")
+    if o.strip()
+]
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# CORS: open by default (this is a public citizen-facing API protected by
+# JWT, not cookies), but can be locked down to specific frontend origin(s)
+# by setting CORS_ALLOWED_ORIGINS (comma-separated) in the environment.
+_cors_allowed = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+if _cors_allowed:
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_allowed.split(",") if o.strip()]
+else:
+    CORS_ALLOW_ALL_ORIGINS = True
 
 
 # Application definition
@@ -56,6 +79,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -86,12 +110,17 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+#
+# Uses DATABASE_URL (e.g. Render/Railway-provisioned Postgres) when set,
+# so data survives redeploys - falls back to local SQLite otherwise.
+# SQLite in production would reset on every deploy since most hosts don't
+# persist the filesystem between builds.
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+    )
 }
 
 
@@ -135,6 +164,15 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 
 REST_FRAMEWORK = {
